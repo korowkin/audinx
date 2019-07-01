@@ -1,0 +1,97 @@
+<?
+header("Content-Type: text/plain");
+
+if ($_GET['mode'] == 'startup')
+ {
+?>
+
+  DROP TARGET "icecast";
+  CREATE TARGET "icecast" ENCODER "MP3" BITRATE "192" QUALITY "2" TRANSPORT "ICECAST" HOST "promodj.ru" PORT "8000" MOUNTPOINT "/fatboyslim" TITLE "Fatboy Slim Radio (powered by audinx.ru)" PASSWORD "blablabla" URL "http://www.fatboyslim.ru/" GENRE "FatboySlim" BITRATE "192" PUBLIC "1" DESCRIPTION "True Fatboy Slim Radio (powered by audinx)";
+
+  DEATTACH FILTER "equalizer" FROM MASTER;
+  DEATTACH FILTER "compressor" FROM MASTER;
+  DEATTACH FILTER "enhancer" FROM MASTER;
+
+  DROP FILTER "equalizer";
+  DROP FILTER "compressor";
+  DROP FILTER "enhancer";
+
+  CREATE FILTER "compressor" TYPE "COMPRESSOR" DEFAULT ENABLED "1" THRESHOLD "-16" ATTACK "1" DECAY "25" RATIO "4" GAIN "0.0";
+  CREATE FILTER "equalizer" TYPE "EQUALIZER" DEFAULT ENABLED "1" BANDS "8" VALUES "0,0,0,0,0,0,0,0";
+  CREATE FILTER "enhancer" TYPE "ENHANCER" DEFAULT ENABLED "1" FREQUENCY "16000" VOLUME "120";
+  CREATE FILTER "sound3d" TYPE "SOUND3D" DEFAULT ENABLED "1" VOLUME "2000";
+  CREATE FILTER "truebass" TYPE "TRUEBASS" DEFAULT ENABLED "1" FREQUENCY "200" VOLUME "50";
+
+  ATTACH FILTER "compressor" TO MASTER;
+  ATTACH FILTER "equalizer" TO MASTER;
+  ATTACH FILTER "truebass" TO MASTER;
+  ATTACH FILTER "sound3d" TO MASTER;
+  ATTACH FILTER "enhancer" TO MASTER;
+
+  TITLE "good to be back, yea";
+
+  EXECUTE ANYWAY "http://domain.tld/fatboyslim.html?mode=next&id=f1&rightnow=1";
+
+<?
+ }
+elseif ($_GET['mode'] == 'next')
+ {
+  $id = $_GET['id'];
+
+  $files = file('fatboyslim_tracks.txt');
+  $jingles = file('fatboyslim_jingles.txt');
+  $scratches = file('fatboyslim_scratches.txt');
+
+  shuffle($files);
+  shuffle($jingles);
+  shuffle($scratches);
+
+  $fname = trim(array_pop($files));
+  $jingle = trim(array_pop($jingles));
+  $scratch = trim(array_pop($scratches));
+
+  $id2 = ($_GET['id'] == 'f1') ? 'f2' : 'f1';
+  $id_jingle = $id . '_jingle_' . md5(microtime());
+  $id_scratch = $id . '_scratch_' . md5(microtime());
+?>
+
+  DROP SOURCE "<? echo $id; ?>";
+  CREATE SOURCE "<? echo $id; ?>" REMOTE "<? echo $fname ?>" SCAN;
+  CREATE SOURCE "<? echo $id_jingle; ?>" REMOTE "<? echo $jingle ?>" SCAN;
+  CREATE SOURCE "<? echo $id_scratch; ?>" REMOTE "<? echo $scratch ?>" SCAN;
+
+  CREATE FILTER "flanger_<? echo $id_jingle; ?>" TYPE "FLANGER" DEFAULT ENABLED "1" LEFT FREQUENCY "1.0" DELAY "0.05" PHASEINVERT "1" RIGHT FREQUENCY "0.125" DELAY "0.005" PHASEINVERT "1";
+  ATTACH FILTER "flanger_<? echo $id_jingle; ?>" TO SOURCE "<? echo $id_jingle; ?>";
+
+  SET VOLUME OF SOURCE "<? echo $id; ?>" TO "0";
+  SET VOLUME OF SOURCE "<? echo $id_jingle; ?>" TO "70";
+
+  SEEK SOURCE "<? echo $id; ?>" TO "15";
+
+  <? if ($_GET['rightnow']): ?>
+  SET VOLUME OF SOURCE '<? echo $id; ?>' FROM '0' TO '100' DURING '2';
+  PLAY SOURCE "<? echo $id; ?>";
+  <? else: ?>
+  SET VOLUME OF SOURCE '<? echo $id; ?>' TO '0';
+  <? endif; ?>
+
+  SCHEDULE SOURCE "<? echo $id; ?>" AT "1" DO "TITLE '<? echo basename($fname); ?>';";
+  SCHEDULE SOURCE "<? echo $id; ?>" AT "-13" DO "SET VOLUME OF SOURCE '<? echo $id; ?>' TO '0' DURING '0.3'; PLAY SOURCE '<? echo $id_scratch; ?>'; SLEEP '0.8'; PLAY SOURCE '<? echo $id_jingle; ?>'; SLEEP '0.5'; SET VOLUME OF SOURCE '<? echo $id2; ?>' FROM '0' TO '25' DURING '0.35'; SLEEP '0.01'; PLAY SOURCE '<? echo $id2; ?>'; TITLE 'RRRRRRRRRRRRRRRRRRRRRRRITE ABOUT NOW';";
+  SCHEDULE SOURCE "<? echo $id; ?>" AT "-0.05" DO "EXECUTE ANYWAY 'http://domain.tld/fatboyslim.html?mode=next&id=<? echo $id; ?>';";
+  SCHEDULE SOURCE "<? echo $id_jingle; ?>" AT "-0.05" DO "DROP SOURCE '<? echo $id_jingle; ?>'; DROP FILTER 'flanger_<? echo $id_jingle; ?>'";
+  SCHEDULE SOURCE "<? echo $id_jingle; ?>" AT "-1.0" DO "SET VOLUME OF SOURCE '<? echo $id2; ?>' TO '80' DURING '1.5';";
+  SCHEDULE SOURCE "<? echo $id_scratch; ?>" AT "-0.05" DO "DROP SOURCE '<? echo $id_scratch; ?>';";
+
+  <? if ($_GET['rightnow']): ?>
+  LOG '<? echo $id; ?> setted up, now going to prepare <? echo $id2; ?>';
+
+  EXECUTE ANYWAY "http://domain.tld/fatboyslim.html?mode=next&id=<? echo $id2; ?>";
+  <? else: ?>
+  LOG '<? echo $id; ?> setted up';
+  <? endif; ?>
+
+<?
+ }
+
+die;
+?>
